@@ -1,0 +1,4 @@
+- Check that start method is correctly implemented for the actor
+- Helper method that allows functions to subscribe to events
+- Helper macros to easily call and define tasks
+- Fix abcgen::actor attribute not being recognized

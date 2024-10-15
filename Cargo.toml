@@ -1,0 +1,38 @@
+[package]
+name = "abcgen"
+version = "0.1.0"
+edition = "2021"
+authors = ["Francesco Buldo <frbuldo@gmail.com>"]
+categories = ["rust-patterns"]
+description = "A procedural macro to generate boilerplate code for objects implementing the 'Actor' pattern"
+documentation = "https://docs.rs/abcgen"
+keywords = [
+    "actor",  
+    "async",
+    "runnable",
+    "boilerplate", 
+    "service",
+    "code-generation",
+    "boilerplate",
+    "pattern",
+]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/frabul/abcgen"
+readme = "README.md"
+exclude = ["TODO"]
+
+
+[dependencies]
+abcgen-attributes = { path = "attributes", version = "0.1.0" }
+thiserror = "1.0.64"
+
+[dev-dependencies]
+tokio = { version = "1.40.0", features = ["full"] }
+log = "0.4.22"
+env_logger = "0.11.5"
+syn = { version = "2.0.79", features = ["full"] }
+ab-code-gen = { path = "code_gen" }
+quote = "1.0.37"
+
+[workspace] 
+
