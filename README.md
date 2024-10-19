@@ -1,7 +1,7 @@
 # abcgen - Actor's Boilerplate Code Generator
 **abcgen** helps you to build Actor object by producing all the boilerplate code needed by this patter, meaning that all the code involved in defining/sending/raceiving/unwrapping messages and managing lifetime of the actor is hidden from user. The use should only focus on the logic of the service that the actor is going to provide.
-**abcg** produces Actor objects that are based on the `async`/`await` syntax and the tokio library.
-The actor objects generated do not require any scheduler o manager to run, they are standalone and can be used in any (tokio) context. 
+**abcgen** produces Actor objects that are based on the `async`/`await` syntax and the **tokio** library.
+The actor objects generated do not require any scheduler o manager to run, they are standalone and can be used in any (**tokio**) context. 
 ```rust 
 // Super quick example
 #[abcgen::actor_module]
