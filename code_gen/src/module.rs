@@ -48,7 +48,7 @@ impl ActorModule<'_> {
         let mut methods: Vec<MessageHandlerMethod<'a>> = Vec::new();
         for item in impl_items {
             if let syn::ImplItem::Fn(m) = item {
-                if m.attrs.iter().any(|a| a.path().is_ident("message_handler")) {
+                if m.attrs.iter().any(|a| test_attribute(a, "message_handler")) {
                     methods.push(MessageHandlerMethod::new(m)?);
                 }
             }
@@ -207,6 +207,10 @@ impl ActorModule<'_> {
     }
 }
 
+fn test_attribute(attr: &syn::Attribute, expected: &str) -> bool {
+    attr.path().segments.last().unwrap().ident == expected
+}
+
 fn is_actor(item: &Item) -> bool {
     let attribututes = match item {
         Item::Struct(it) => &it.attrs,
@@ -215,7 +219,7 @@ fn is_actor(item: &Item) -> bool {
     };
     attribututes
         .iter()
-        .any(|attr| attr.path().is_ident("actor"))
+        .any(|attr| test_attribute(attr, "actor"))
 }
 
 fn is_impl_of<'a>(item: &'a Item, id: &'a Ident) -> Option<&'a syn::ItemImpl> {
@@ -234,7 +238,7 @@ fn extract_events_enum(items: &[syn::Item]) -> Result<Vec<&Ident>> {
         .iter()
         .filter_map(|i| {
             if let Item::Enum(e) = i {
-                if e.attrs.iter().any(|a| a.path().is_ident("events")) {
+                if e.attrs.iter().any(|a| test_attribute(a, "events")) {
                     return Some(&e.ident);
                 }
             }
