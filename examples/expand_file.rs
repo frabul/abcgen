@@ -15,7 +15,7 @@ fn main() {
             _ => None,
         })
         .unwrap();
-    let actor_module = code_gen::ActorModule::new(module).unwrap();
+    let actor_module = ab_code_gen::ActorModule::new(module).unwrap();
 
     let code = actor_module.generate().unwrap();
 
