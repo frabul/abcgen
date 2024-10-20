@@ -1,5 +1,6 @@
 //! # abcgen - Actor's Boilerplate Code Generator
-//! **abcgen** helps you to build Actor object by producing all the boilerplate code needed by this patter, meaning that all the code involved in defining/sending/raceiving/unwrapping messages and managing lifetime of the actor is hidden from user. The use should only focus on the logic of the service that the actor is going to provide.
+//! **abcgen** helps you to build Actor object by producing all the boilerplate code needed by this patter, meaning that all the code involved in defining/sending/raceiving/unwrapping messages and managing lifetime of the actor is hidden from user. <br>
+//! The user should only focus on the logic of the service that the actor is going to provide.
 //! **abcgen** produces Actor objects that are based on the `async`/`await` syntax and the **tokio** library.
 //! The actor objects generated do not require any scheduler o manager to run, they are standalone and can be used in any (**tokio**) context. 
 //! ```rust 
@@ -58,24 +59,23 @@
 //! 
 //! ```
 //! ## The user should provide:
-//! - a struct or enum definition marked with 'actor' attribute 
-//! - implement start(...) and shutdown(...) methods for the actor
-//! - implement, for the actor, a set of methods marked with 'message_handler' attribute; these are going to handle the messages that the actor can receive.
-//! - optionally, an enum definition marked with 'events' attribute to define the events that the actor can signal
+//! - a struct or enum definition marked with `actor` attribute 
+//! - implement start(...) and shutdown(...) methods for the `actor`
+//! - implement, for the `actor`, a set of methods marked with `message_handler` attribute; these are going to handle the messages that the `actor` can receive.
+//! - optionally, an enum definition marked with `events` attribute to define the events that the `actor` can signal
 //! 
 //! ## The procedural macro will generate:
-//! - implementation of run(self) method for the actor which will return an ActorProxy
-//! - implementation of message handling logic for the actor: 
-//!     - calling the start() method before running the actor's loop
-//!     - calling the shutdown() method after exiting the actor's loop
+//! - implementation of `run(self)` method for the `actor` which will return an ActorProxy
+//! - implementation of message handling logic for the `actor`: 
+//!     - calling the `start(...)` method before entering the `actor`'s loop
+//!     - calling the `shutdown(&mut self)` method after exiting the `actor`'s loop
 //!     - handling of stop signal
 //!     - handling of messages (support replies)
-//!     - handling of tasks (functions that can be enqueued to be invoked in the actor's loop so the can access &mut Actor)
-//! - Actor::invoke(...) helper method to enqueue a task to be executed in the actor's loop 
-//! - an ActorProxy object that implements all of the methods that were marked with 'message_handler' attribute
-//! - a message enum that contains all the messages that the actor can receive  (which is not meant to be used directly by the user)
-//! 
-//! More details can be found in the example below.
+//!     - handling of tasks (functions that can be enqueued to be invoked in the `actor`'s loop so the can access `&mut Actor`)
+//! - `Actor::invoke(...)` helper method to enqueue a task to be executed in the `actor`'s loop 
+//! - an ActorProxy object that implements all of the methods that were marked with `message_handler` attribute
+//! - a message enum that contains all the messages that the `actor` can receive  (which is not meant to be used directly by the user)
+
 
 use std::{future::Future, pin::Pin};
 
@@ -83,7 +83,7 @@ pub use abcgen_attributes::*;
 
 
 /// Helper type for async tasks
-/// The tasks that re ament to be sent to the actor need to return one of these
+/// The tasks that are meant to be sent to the actor need to return this type
 pub type PinnedFuture<'a, TResult> = Pin<Box<dyn Future<Output = TResult> + Send + 'a>>;
 
 /// The type of the tasks that are sent to the actor

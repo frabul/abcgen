@@ -3,6 +3,12 @@ use syn::parse_macro_input;
 
 use ab_code_gen::*;
 
+/// The `actor_module` attribute is used to mark a module that contains the actor definition.
+/// It will generate the necessary code to implement the actor pattern, that is:
+/// - a proxy object that implements all the methods that are marked with the `message_handler` attribute
+/// - a message enum that contains all the messages that the actor can receive
+/// - a `run` method for that is going to start the actor and return the proxy object
+/// - all the needed logic for the actor
 #[proc_macro_attribute]
 pub fn actor_module(args: TokenStream, input: TokenStream) -> TokenStream {
     let _ = args;
@@ -27,18 +33,23 @@ pub fn actor_module(args: TokenStream, input: TokenStream) -> TokenStream {
     quote::quote! {#input}.into()
 }
 
+/// This attribute is used to mark the struct or enum that is going to be the actor.
 #[proc_macro_attribute]
 pub fn actor(args: TokenStream, input: TokenStream) -> TokenStream {
     let _ = args;
     let _ = input;
     input
 }
+
+/// This attribute is used to mark the enum that defines the events that the actor can signal.
 #[proc_macro_attribute]
 pub fn events(args: TokenStream, input: TokenStream) -> TokenStream {
     let _ = args;
     let _ = input;
     input
 }
+
+/// This attribute is used to mark the methods that are going to handle the messages that the actor can receive.
 #[proc_macro_attribute]
 pub fn message_handler(args: TokenStream, input: TokenStream) -> TokenStream {
     let _ = args;
