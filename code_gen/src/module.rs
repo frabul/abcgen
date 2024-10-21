@@ -86,13 +86,19 @@ impl ActorModule<'_> {
         let message_dispatcher_method = self.generate_dispatcher_method();
         let messages_enum_name = &self.message_enum.name;
         let struct_name = self.actor_ident;
-        let (events1, events2, events3) = match self.events.as_ref() {
+        let (events1, events2, events3, event_sender_alias) = match self.events.as_ref() {
             Some(events) => (
                 quote::quote! { let (event_sender, event_receiver) = tokio::sync::broadcast::channel::<#events>(20);    },
                 quote::quote! { events: event_receiver,                                                                 },
                 quote::quote! { ,event_sender                                                                           },
+                quote::quote! { type EventSender = tokio::sync::broadcast::Sender<#events>;                             },
             ),
-            None => (TokenStream::new(), TokenStream::new(), TokenStream::new()),
+            None => (
+                TokenStream::new(),
+                TokenStream::new(),
+                TokenStream::new(),
+                TokenStream::new(),
+            ),
         };
         let actor_impl = quote::quote! {
             impl #struct_name {
@@ -162,6 +168,10 @@ impl ActorModule<'_> {
         let message_enum_code = self.message_enum.generate()?;
         let proxy_code = self.proxy.generate();
         let code = quote::quote! {
+             
+            #event_sender_alias
+            pub type TaskSender = tokio::sync::mpsc::Sender<Task<#struct_name>>;
+
             #message_enum_code
             #proxy_code
             #actor_impl

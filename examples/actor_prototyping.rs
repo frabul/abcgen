@@ -18,6 +18,8 @@ mod my_actor_module {
 
     pub type Task<TActor> = Box<dyn (for<'b> Fn(&'b mut TActor) -> PinnedFuture<'b, ()>) + Send>;
 
+    pub type TaskSender = tokio::sync::mpsc::Sender<Task<MyActor>>;
+    pub type EventSender = tokio::sync::broadcast::Sender<MyActorEvent>;
     #[derive(Debug, thiserror::Error)]
     pub enum AbcgenError {
         #[error("Service is already stopped")]
