@@ -11,12 +11,9 @@ documentation = "https://docs.rs/ab-code-gen"
 keywords = [
     "actor",
     "async",
-    "generator",
-    "code-generation",
-    "service",
-    "macro",
     "boilerplate",
-    "pattern",
+    "code-generation",
+    "macro", 
 ]
 
 [dependencies]
