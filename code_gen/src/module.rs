@@ -88,10 +88,11 @@ impl ActorModule<'_> {
         let struct_name = self.actor_ident;
         let (events1, events2, events3, event_sender_alias) = match self.events.as_ref() {
             Some(events) => (
-                quote::quote! { let (event_sender, event_receiver) = tokio::sync::broadcast::channel::<#events>(20);    },
-                quote::quote! { events: event_receiver,                                                                 },
-                quote::quote! { ,event_sender                                                                           },
-                quote::quote! { type EventSender = tokio::sync::broadcast::Sender<#events>;                             },
+                quote::quote! { let (event_sender, _) = tokio::sync::broadcast::channel::<#events>(20);  
+                                let event_sender_clone = event_sender.clone();                            }, 
+                quote::quote! { ,event_sender_clone                                                       },
+                quote::quote! { events: event_sender,                                                     },
+                quote::quote! { type EventSender = tokio::sync::broadcast::Sender<#events>;               },
             ),
             None => (
                 TokenStream::new(),
@@ -109,7 +110,7 @@ impl ActorModule<'_> {
                     let (task_sender, mut task_receiver) = tokio::sync::mpsc::channel::<Task<#struct_name>>(20);
                     tokio::spawn(async move {
                         let mut actor = self;
-                        actor.start(task_sender  #events3 ).await;
+                        actor.start(task_sender  #events2 ).await;
                         tokio::select! {
                             _ = actor.select_receivers(&mut msg_receiver, &mut task_receiver) => { log::debug!("(abcgen) all proxies dropped"); }  // all proxies were dropped => shutdown
                             _ = stop_receiver => { log::debug!("(abcgen) stop signal received"); } // stop signal received => shutdown
@@ -122,7 +123,7 @@ impl ActorModule<'_> {
                     let proxy = #proxy {
                         message_sender: msg_sender,
                         stop_signal: Some(stop_sender),
-                        #events2
+                        #events3
                     };
 
                     proxy

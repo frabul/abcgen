@@ -36,10 +36,10 @@ impl ActorProxy<'_> {
         let events_enum: Vec<_> = self.events_enum.iter().collect();
 
         // -- def --
-        let struct_def = quote::quote! {
+        let struct_def: TokenStream = quote::quote! {
             pub struct #struct_name {
                 message_sender: tokio::sync::mpsc::Sender<#message_enum_name>,
-                #(events: tokio::sync::broadcast::Receiver<#events_enum>,)*
+                #(events: tokio::sync::broadcast::Sender<#events_enum>,)*
                 stop_signal: std::option::Option<tokio::sync::oneshot::Sender<()>>,
             }
         };
@@ -70,7 +70,7 @@ impl ActorProxy<'_> {
                 }
 
                 #(pub fn get_events(&self) -> tokio::sync::broadcast::Receiver<#events_enum> {
-                    self.events.resubscribe()
+                    self.events.subscribe()
                 })*
 
                 //---- message sender methods ----
