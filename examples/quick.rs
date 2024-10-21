@@ -9,7 +9,7 @@ mod actor {
     }
 
     impl MyActor {
-        pub async fn start(&mut self, task_sender: tokio::sync::mpsc::Sender<Task<MyActor>>) {
+        pub async fn start(&mut self, task_sender: TaskSender) {
             println!("Starting");
             // here you can spawn some tasks using tokio::spawn
             // or enqueue some tasks into the actor's main loop by sending them to task_sender

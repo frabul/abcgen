@@ -6,7 +6,7 @@ mod actor {
         pub some_value: i32,
     }
     impl MyActor {
-        pub async fn start(&mut self, task_sender: tokio::sync::mpsc::Sender<Task<MyActor>>) {
+        pub async fn start(&mut self, task_sender: TaskSender) {
             println!("Starting");
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;

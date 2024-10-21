@@ -1,5 +1,4 @@
 /// Example on how to use the ab-code-gen library to generate the code by parsing and modifying a file.
-
 use std::{
     io::{self, Write},
     thread::spawn,

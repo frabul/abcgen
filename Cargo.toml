@@ -1,6 +1,6 @@
 [package]
 name = "abcgen"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Francesco Buldo <frbuldo@gmail.com>"]
 categories = ["rust-patterns"]
@@ -32,5 +32,11 @@ tokio = { version = "1.40.0", features = ["full"] }
 log = "0.4.22"
 env_logger = "0.11.5"
 ab-code-gen = { path = "code_gen" }
+
+[profile.release]
+opt-level = 3  
+strip = true
+debug = false
+lto = true
 
 [workspace]

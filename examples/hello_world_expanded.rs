@@ -9,14 +9,10 @@ mod hello_wordl_actor {
     }
     #[actor]
     pub struct HelloWorldActor {
-        pub event_sender: Option<tokio::sync::broadcast::Sender<HelloWorldActorEvent>>,
+        pub event_sender: Option<EventSender>,
     }
     impl HelloWorldActor {
-        async fn start(
-            &mut self,
-            task_sender: tokio::sync::mpsc::Sender<Task<HelloWorldActor>>,
-            event_sender: tokio::sync::broadcast::Sender<HelloWorldActorEvent>,
-        ) {
+        async fn start(&mut self, task_sender: TaskSender, event_sender: EventSender) {
             self.event_sender = Some(event_sender);
             println!("Hello, World!");
             tokio::spawn(async move {

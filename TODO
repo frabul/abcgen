@@ -2,3 +2,5 @@
 - Helper method that allows functions to subscribe to events
 - Helper macros to easily call and define tasks 
 - implement the possibility to specify channels size
+- support generics on message signature
+- support generics on the actor

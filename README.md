@@ -14,7 +14,7 @@ mod actor {
     }
 
     impl MyActor {
-        pub async fn start(&mut self, task_sender: tokio::sync::mpsc::Sender<Task<MyActor>>) {
+        pub async fn start(&mut self, task_sender: TaskSender) {
             println!("Starting");
             // here you can spawn some tasks using tokio::spawn
             // or enqueue some tasks into the actor's main loop by sending them to task_sender
@@ -104,7 +104,7 @@ mod hello_wordl_actor {
 
     #[actor] // this attribute is used to mark the struct defining the actor
     pub struct HelloWorldActor {
-        pub event_sender: Option<tokio::sync::broadcast::Sender<HelloWorldActorEvent>>,
+        pub event_sender: Option<EventSender>,
     }
 
     impl HelloWorldActor {
@@ -114,9 +114,9 @@ mod hello_wordl_actor {
             &mut self,
             // this object can be used to send a function to be invoked in the actor's loop
             // see Self::invoke
-            task_sender: tokio::sync::mpsc::Sender<Task<HelloWorldActor>>,  
+            task_sender: TaskSender,  
             // this argument should be removed if there are no events
-            event_sender: tokio::sync::broadcast::Sender<HelloWorldActorEvent>, 
+            event_sender: EventSender, 
         ) {
             self.event_sender = Some(event_sender);
             println!("Hello, World!");

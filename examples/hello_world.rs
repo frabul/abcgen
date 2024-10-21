@@ -5,7 +5,7 @@ mod hello_wordl_actor {
 
     // the follow attribute is used to mark the enum defining the events that can be signaled by the actor
     // events are optional, they can be omitted
-    #[events] 
+    #[events]
     #[derive(Debug, Clone)]
     pub enum HelloWorldActorEvent {
         SomeoneAskedMyName(String),
@@ -14,15 +14,15 @@ mod hello_wordl_actor {
 
     #[actor] // this attribute is used to mark the struct defining the actor
     pub struct HelloWorldActor {
-        pub event_sender: Option<tokio::sync::broadcast::Sender<HelloWorldActorEvent>>,
+        pub event_sender: Option<EventSender>,
     }
 
     impl HelloWorldActor {
         // following function *must* be implemented by the user and is called by the run function
         async fn start(
             &mut self,
-            task_sender: tokio::sync::mpsc::Sender<Task<HelloWorldActor>>,  // this can be used to send a function to be invoked in the actor's loop
-            event_sender: tokio::sync::broadcast::Sender<HelloWorldActorEvent>, // this argument should be removed if there are no events
+            task_sender: TaskSender, // this can be used to send a function to be invoked in the actor's loop
+            event_sender: EventSender, // this argument should be removed if there are no events
         ) {
             self.event_sender = Some(event_sender);
             println!("Hello, World!");
@@ -31,7 +31,7 @@ mod hello_wordl_actor {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 // the following call will send the function Self::still_here to be invoked by the actor's loop
                 // ⚠️ Do not put any sleep in Self::still_here, it will block the actor's loop
-                Self::invoke(&task_sender, Box::new(Self::still_here)).unwrap(); 
+                Self::invoke(&task_sender, Box::new(Self::still_here)).unwrap();
             });
         }
 
@@ -80,7 +80,7 @@ async fn main() {
     let actor = HelloWorldActor { event_sender: None };
     // the following call will spawn a tokio task that will handle the messages received by the actor
     // it consumes the actor and returns a proxy that can be used to send and receive messages
-    let proxy = actor.run();  
+    let proxy = actor.run();
 
     // handle events sent by the actor
     let mut events_rx = proxy.get_events().resubscribe();

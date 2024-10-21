@@ -8,7 +8,7 @@ use abcgen::actor_module;
 #[actor_module]
 mod my_actor_module {
     use std::sync::{atomic::AtomicBool, Arc};
-    
+
     use abcgen::*;
     #[events]
     #[derive(Debug, Clone)]
@@ -25,11 +25,7 @@ mod my_actor_module {
 
     impl MyActor {
         // following functions must be implemented by the user
-        pub async fn start(
-            &mut self,
-            task_sender: tokio::sync::mpsc::Sender<Task<MyActor>>,
-            event_sender: tokio::sync::broadcast::Sender<MyActorEvent>,
-        ) {
+        pub async fn start(&mut self, task_sender: TaskSender, event_sender: EventSender) {
             log::info!("Starting");
             let term_req = self.termination_requested.clone();
             let internal_task = tokio::spawn(async move {

@@ -1,4 +1,4 @@
-//! A sandbox example that i used to prototype what the code generator should finally produce. 
+//! A sandbox example that i used to prototype what the code generator should finally produce.
 //! This file is not maintained and could eventually differ from the final implementation.
 
 #![allow(unused)]
@@ -70,17 +70,17 @@ mod my_actor_module {
             });
             self.internal_task = Some(internal_task);
         }
-    
+
         pub async fn shutdown(&mut self) {
             log::info!("Shutting down");
             self.termination_requested
                 .store(true, std::sync::atomic::Ordering::Relaxed);
         }
-        
+
         pub async fn dummy_task<'b>(&'b mut self) {
             log::info!("Dummy task executed");
         }
-    
+
         pub fn dummy_task_2(&mut self) -> PinnedFuture<'_, ()> {
             Box::pin(async {
                 log::info!("Dummy dummy task 2 executed");
@@ -101,7 +101,7 @@ mod my_actor_module {
             42
         }
     }
-    
+
     #[derive(Debug)]
     pub enum MyActorMessage {
         DoThis {
@@ -114,7 +114,7 @@ mod my_actor_module {
             respond_to: tokio::sync::oneshot::Sender<i32>,
         },
     }
-    
+
     pub struct MyActorProxy {
         message_sender: tokio::sync::mpsc::Sender<MyActorMessage>,
         events: tokio::sync::broadcast::Receiver<MyActorEvent>,
@@ -127,14 +127,14 @@ mod my_actor_module {
                 None => false,
             }
         }
-    
+
         pub fn stop(&mut self) -> Result<(), AbcgenError> {
             match self.stop_signal.take() {
                 Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::AlreadyStopped),
                 None => Err(AbcgenError::AlreadyStopped),
             }
         }
-    
+
         pub async fn stop_and_wait(&mut self) -> Result<(), AbcgenError> {
             self.stop()?;
             while self.is_running() {
@@ -142,7 +142,7 @@ mod my_actor_module {
             }
             Ok(())
         }
-    
+
         pub fn get_events(&self) -> tokio::sync::broadcast::Receiver<MyActorEvent> {
             self.events.resubscribe()
         }
@@ -245,10 +245,8 @@ mod my_actor_module {
                 .try_send(task)
                 .map_err(|e| AbcgenError::ChannelError(Box::new(e)))
         }
-
     }
 }
-
 
 // ----------------- main -----------------
 #[tokio::main]

@@ -18,11 +18,7 @@ mod my_actor_module {
         pub(crate) internal_task: Option<tokio::task::JoinHandle<()>>,
     }
     impl MyActor {
-        pub async fn start(
-            &mut self,
-            task_sender: tokio::sync::mpsc::Sender<Task<MyActor>>,
-            event_sender: tokio::sync::broadcast::Sender<MyActorEvent>,
-        ) {
+        pub async fn start(&mut self, task_sender: TaskSender, event_sender: EventSender) {
             log::info!("Starting");
             let term_req = self.termination_requested.clone();
             let internal_task = tokio::spawn(async move {
