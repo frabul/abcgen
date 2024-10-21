@@ -1,26 +1,26 @@
 [package]
 name = "ab-code-gen"
 version = "0.1.0"
-edition = "2021" 
+edition = "2021"
 authors = ["Francesco Buldo <frbuldo@gmail.com>"]
 categories = ["rust-patterns", "development-tools::procedural-macro-helpers"]
-description = "Functions to generate boilerplate code for objects implementing the 'Actor' pattern. Used by the abcgen."
-documentation = "https://docs.rs/abcgen"
+description = "Functions to generate boilerplate code for objects implementing the 'Actor' pattern. Used by the abcgen crate."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/frabul/abcgen"
+documentation = "https://docs.rs/ab-code-gen"
 keywords = [
-    "actor",  
+    "actor",
     "async",
     "generator",
-    "macro", 
-    "service",
     "code-generation",
+    "service",
+    "macro",
     "boilerplate",
     "pattern",
 ]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/frabul/abcgen"
 
 [dependencies]
-syn = { version = "2.0.79", features = ["full"] }
+syn = { version = "2.0.82", features = ["full"] }
 quote = "1.0.37"
 proc-macro2 = "1.0.87"
 convert_case = "0.6.0"

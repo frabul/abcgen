@@ -4,19 +4,20 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Francesco Buldo <frbuldo@gmail.com>"]
 categories = ["rust-patterns"]
-description = "Procedura macro attributes used by abcgen"
-documentation = "https://docs.rs/abcgen"
+description = "Procedural macro attributes used by abcgen crate."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/frabul/abcgen"
+documentation = "https://docs.rs/abcgen-attributes"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = { version = "2.0.79", features = ["default"] }
+syn = { version = "2.0.82", features = ["default"] }
 quote = "1.0.37"
 proc-macro2 = "1.0.87"
 convert_case = "0.6.0"
-ab-code-gen= { path = "../code_gen", version = "0.1.0" }
+ab-code-gen = { path = "../code_gen", version = "0.1.0" }
+
 [dev-dependencies]
 syn = { version = "2.0.79", features = ["full"] }
