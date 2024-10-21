@@ -1,6 +1,6 @@
 [package]
 name = "abcgen-attributes"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Francesco Buldo <frbuldo@gmail.com>"]
 categories = ["rust-patterns"]
@@ -17,7 +17,7 @@ syn = { version = "2.0.82", features = ["default"] }
 quote = "1.0.37"
 proc-macro2 = "1.0.87"
 convert_case = "0.6.0"
-ab-code-gen = { path = "../code_gen", version = "0.1.0" }
+ab-code-gen = { path = "../code_gen", version = "0.2.0" }
 
 [dev-dependencies]
 syn = { version = "2.0.79", features = ["full"] }

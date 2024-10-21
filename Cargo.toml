@@ -1,6 +1,6 @@
 [package]
 name = "abcgen"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Francesco Buldo <frbuldo@gmail.com>"]
 categories = ["rust-patterns"]
@@ -25,7 +25,7 @@ exclude = ["TODO"]
 
 
 [dependencies]
-abcgen-attributes = { path = "attributes", version = "0.1.0" }
+abcgen-attributes = { path = "attributes", version = "0.2.0" }
 thiserror = "1.0.64"
 
 [dev-dependencies]
