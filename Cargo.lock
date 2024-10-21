@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ab-code-gen"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "abcgen"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ab-code-gen",
  "abcgen-attributes",
@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "abcgen-attributes"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ab-code-gen",
  "convert_case",
