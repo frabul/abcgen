@@ -42,6 +42,10 @@ pub fn actor(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 /// This attribute is used to mark the enum that defines the events that the actor can signal.
+/// It can be applied to
+/// - structs
+/// - enums
+/// - type aliases
 #[proc_macro_attribute]
 pub fn events(args: TokenStream, input: TokenStream) -> TokenStream {
     let _ = args;

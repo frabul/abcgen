@@ -168,7 +168,7 @@ impl ActorModule<'_> {
         let message_enum_code = self.message_enum.generate()?;
         let proxy_code = self.proxy.generate();
         let code = quote::quote! {
-             
+
             #event_sender_alias
             pub type TaskSender = tokio::sync::mpsc::Sender<Task<#struct_name>>;
 
@@ -247,11 +247,24 @@ fn extract_events_enum(items: &[syn::Item]) -> Result<Vec<&Ident>> {
     let events: Vec<_> = items
         .iter()
         .filter_map(|i| {
-            if let Item::Enum(e) = i {
-                if e.attrs.iter().any(|a| test_attribute(a, "events")) {
-                    return Some(&e.ident);
+            match i {
+                Item::Enum(e) => {
+                    if e.attrs.iter().any(|a| test_attribute(a, "events")) {
+                        return Some(&e.ident);
+                    }
                 }
-            }
+                Item::Type(t) => {
+                    if t.attrs.iter().any(|a| test_attribute(a, "events")) {
+                        return Some(&t.ident);
+                    }
+                }
+                Item::Struct(s) => {
+                    if s.attrs.iter().any(|a| test_attribute(a, "events")) {
+                        return Some(&s.ident);
+                    }
+                }
+                _ => {}
+            };
             None
         })
         .collect();

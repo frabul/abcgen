@@ -1,15 +1,13 @@
 mod actor_messages;
-mod module;
 mod actor_proxy;
+mod module;
 
-pub use actor_messages::*; 
-pub use module::*;
+pub use actor_messages::*;
 pub use actor_proxy::*;
+pub use module::*;
 
 use convert_case::Casing;
 use syn::ReturnType;
-
-
 
 #[derive(Clone)]
 pub struct MessageHandlerMethod<'a> {
