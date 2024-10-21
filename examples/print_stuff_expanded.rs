@@ -1,8 +1,8 @@
+#![doc = " Illustrates the functionalities by printing messages to the console."]
 #![allow(unused)]
 use abcgen::actor_module;
 use my_actor_module::{MyActor, MyActorEvent};
 use std::sync::{atomic::AtomicBool, Arc};
-//#[actor_module]
 mod my_actor_module {
     use abcgen::*;
     use std::sync::{atomic::AtomicBool, Arc};
@@ -12,7 +12,6 @@ mod my_actor_module {
         Event1,
         Event2,
     }
-
     #[actor]
     pub struct MyActor {
         pub(crate) termination_requested: Arc<AtomicBool>,
@@ -78,6 +77,8 @@ mod my_actor_module {
             42
         }
     }
+    type EventSender = tokio::sync::broadcast::Sender<MyActorEvent>;
+    pub type TaskSender = tokio::sync::mpsc::Sender<Task<MyActor>>;
     #[derive(Debug)]
     pub enum MyActorMessage {
         DoThis {
@@ -92,7 +93,7 @@ mod my_actor_module {
     }
     pub struct MyActorProxy {
         message_sender: tokio::sync::mpsc::Sender<MyActorMessage>,
-        events: tokio::sync::broadcast::Receiver<MyActorEvent>,
+        events: tokio::sync::broadcast::Sender<MyActorEvent>,
         stop_signal: std::option::Option<tokio::sync::oneshot::Sender<()>>,
     }
     impl MyActorProxy {
@@ -116,7 +117,7 @@ mod my_actor_module {
             Ok(())
         }
         pub fn get_events(&self) -> tokio::sync::broadcast::Receiver<MyActorEvent> {
-            self.events.resubscribe()
+            self.events.subscribe()
         }
         pub async fn do_this(&self, par1: i32, par2: String) -> Result<(), AbcgenError> {
             let msg = MyActorMessage::DoThis { par1, par2 };
@@ -152,20 +153,20 @@ mod my_actor_module {
     impl MyActor {
         pub fn run(self) -> MyActorProxy {
             let (msg_sender, mut msg_receiver) = tokio::sync::mpsc::channel(20);
-            let (event_sender, event_receiver) =
-                tokio::sync::broadcast::channel::<MyActorEvent>(20);
+            let (event_sender, _) = tokio::sync::broadcast::channel::<MyActorEvent>(20);
+            let event_sender_clone = event_sender.clone();
             let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel::<()>();
             let (task_sender, mut task_receiver) = tokio::sync::mpsc::channel::<Task<MyActor>>(20);
             tokio::spawn(async move {
                 let mut actor = self;
-                actor.start(task_sender, event_sender).await;
+                actor.start(task_sender, event_sender_clone).await;
                 tokio::select! { _ = actor . select_receivers (& mut msg_receiver , & mut task_receiver) => { log :: debug ! ("(abcgen) all proxies dropped") ; } _ = stop_receiver => { log :: debug ! ("(abcgen) stop signal received") ; } }
                 actor.shutdown().await;
             });
             let proxy = MyActorProxy {
                 message_sender: msg_sender,
                 stop_signal: Some(stop_sender),
-                events: event_receiver,
+                events: event_sender,
             };
             proxy
         }
@@ -192,6 +193,7 @@ mod my_actor_module {
                 }
             }
         }
+        #[doc = r" Helper function to send a task to be invoked in the actor loop"]
         fn invoke(
             sender: &tokio::sync::mpsc::Sender<Task<MyActor>>,
             task: Task<MyActor>,
@@ -202,9 +204,6 @@ mod my_actor_module {
         }
     }
 }
-
-
-
 #[tokio::main]
 async fn main() {
     env_logger::builder()

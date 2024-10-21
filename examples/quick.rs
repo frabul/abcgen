@@ -1,4 +1,5 @@
 #[abcgen::actor_module]
+#[allow(unused)]
 mod actor {
     use abcgen::{actor, message_handler, AbcgenError, PinnedFuture, Task};
 

@@ -1,7 +1,5 @@
-//#[abcgen::actor_module]
-#[allow(dead_code)]
+#[allow(unused)]
 mod hello_wordl_actor {
-
     use abcgen::*;
     #[events]
     #[derive(Debug, Clone)]
@@ -51,6 +49,8 @@ mod hello_wordl_actor {
             })
         }
     }
+    type EventSender = tokio::sync::broadcast::Sender<HelloWorldActorEvent>;
+    pub type TaskSender = tokio::sync::mpsc::Sender<Task<HelloWorldActor>>;
     #[derive(Debug)]
     pub enum HelloWorldActorMessage {
         TellMeYourName {
@@ -60,7 +60,7 @@ mod hello_wordl_actor {
     }
     pub struct HelloWorldActorProxy {
         message_sender: tokio::sync::mpsc::Sender<HelloWorldActorMessage>,
-        events: tokio::sync::broadcast::Receiver<HelloWorldActorEvent>,
+        events: tokio::sync::broadcast::Sender<HelloWorldActorEvent>,
         stop_signal: std::option::Option<tokio::sync::oneshot::Sender<()>>,
     }
     impl HelloWorldActorProxy {
@@ -84,7 +84,7 @@ mod hello_wordl_actor {
             Ok(())
         }
         pub fn get_events(&self) -> tokio::sync::broadcast::Receiver<HelloWorldActorEvent> {
-            self.events.resubscribe()
+            self.events.subscribe()
         }
         pub async fn tell_me_your_name(&self, caller: String) -> Result<String, AbcgenError> {
             let (tx, rx) = tokio::sync::oneshot::channel();
@@ -102,21 +102,21 @@ mod hello_wordl_actor {
     impl HelloWorldActor {
         pub fn run(self) -> HelloWorldActorProxy {
             let (msg_sender, mut msg_receiver) = tokio::sync::mpsc::channel(20);
-            let (event_sender, event_receiver) = tokio::sync::broadcast::channel::<HelloWorldActorEvent>(20);
+            let (event_sender, _) = tokio::sync::broadcast::channel::<HelloWorldActorEvent>(20);
+            let event_sender_clone = event_sender.clone();
             let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel::<()>();
-            let (task_sender, mut task_receiver) = tokio::sync::mpsc::channel::<Task<HelloWorldActor>>(20);
+            let (task_sender, mut task_receiver) =
+                tokio::sync::mpsc::channel::<Task<HelloWorldActor>>(20);
             tokio::spawn(async move {
                 let mut actor = self;
-                actor.start(task_sender, event_sender).await;
-                tokio::select! { 
-                    _ = actor.select_receivers (& mut msg_receiver , & mut task_receiver) => { log::debug!("(abcgen) all proxies dropped") ; } 
-                    _ = stop_receiver => { log::debug!("(abcgen) stop signal received") ; } }
+                actor.start(task_sender, event_sender_clone).await;
+                tokio::select! { _ = actor . select_receivers (& mut msg_receiver , & mut task_receiver) => { log :: debug ! ("(abcgen) all proxies dropped") ; } _ = stop_receiver => { log :: debug ! ("(abcgen) stop signal received") ; } }
                 actor.shutdown().await;
             });
             let proxy = HelloWorldActorProxy {
                 message_sender: msg_sender,
                 stop_signal: Some(stop_sender),
-                events: event_receiver,
+                events: event_sender,
             };
             proxy
         }
@@ -126,19 +126,7 @@ mod hello_wordl_actor {
             task_receiver: &mut tokio::sync::mpsc::Receiver<Task<HelloWorldActor>>,
         ) {
             loop {
-                tokio::select! { 
-                    msg = msg_receiver.recv () => {
-                        match msg { 
-                            Some (msg) => { self.dispatch(msg).await; }
-                            None => { break ; } 
-                        } 
-                    }, 
-                    task = task_receiver.recv () => { 
-                        if let Some (task) = task {
-                            task (self) . await ; 
-                        } 
-                    } 
-                }
+                tokio::select! { msg = msg_receiver . recv () => { match msg { Some (msg) => { self . dispatch (msg) . await ; } None => { break ; } } } , task = task_receiver . recv () => { if let Some (task) = task { task (self) . await ; } } }
             }
         }
         async fn dispatch(&mut self, message: HelloWorldActorMessage) {
@@ -149,6 +137,7 @@ mod hello_wordl_actor {
                 }
             }
         }
+        #[doc = r" Helper function to send a task to be invoked in the actor loop"]
         fn invoke(
             sender: &tokio::sync::mpsc::Sender<Task<HelloWorldActor>>,
             task: Task<HelloWorldActor>,
@@ -159,7 +148,6 @@ mod hello_wordl_actor {
         }
     }
 }
-
 use hello_wordl_actor::{HelloWorldActor, HelloWorldActorEvent};
 #[tokio::main]
 async fn main() {

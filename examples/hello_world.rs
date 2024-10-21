@@ -1,4 +1,5 @@
 #[abcgen::actor_module] // this is the attribute that is actually emitting the code by calling a procedural macro
+#[allow(unused)]
 mod hello_wordl_actor {
     use abcgen::*;
 
