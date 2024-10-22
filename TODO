@@ -1,6 +1,5 @@
-- Check that start method is correctly implemented for the actor
-- Helper method that allows functions to subscribe to events
-- Helper macros to easily call and define tasks 
+- Check that start and shutdown methods are correctly implemented for the actor
+- Helper method that allows functions to subscribe to events 
 - implement the possibility to specify channels size
 - support generics on message signature
 - support generics on the actor
