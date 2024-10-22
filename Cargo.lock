@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "abcgen"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "ab-code-gen",
  "abcgen-attributes",
