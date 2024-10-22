@@ -71,13 +71,13 @@ impl MessageEnumVariant<'_> {
         let mut respond_to = TokenStream::new();
         if let Some(ret_type) = self.return_type {
             respond_to = quote::quote! {
-                ,respond_to: tokio::sync::oneshot::Sender<#ret_type>
+                respond_to: tokio::sync::oneshot::Sender<#ret_type>
             };
         }
 
         let message_variant = quote::quote! {
             #variant_name {
-                #(#parameters),*
+                #(#parameters,)*
                 #respond_to
             }
         };
