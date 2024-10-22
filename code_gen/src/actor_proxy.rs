@@ -108,7 +108,7 @@ impl ActorProxy<'_> {
             quote::quote! {
                 pub async fn #fn_name(&self, #(#parameters),*) -> Result<#return_type, AbcgenError> {
                     let (tx, rx) = tokio::sync::oneshot::channel();
-                    let msg = #message_enum_name::#msg_name { #(#parameters_names),* , respond_to: tx };
+                    let msg = #message_enum_name::#msg_name { #(#parameters_names,)* respond_to: tx };
                     let send_res = self.message_sender.send(msg).await;
                     match send_res {
                         Ok(_) => rx.await.map_err(|e| AbcgenError::ChannelError(Box::new(e))),

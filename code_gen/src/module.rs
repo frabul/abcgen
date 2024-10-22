@@ -182,7 +182,7 @@ impl ActorModule<'_> {
     }
 
     pub fn generate_dispatcher_method(&self) -> TokenStream {
-        let message_dispatcher_method = self
+        let patterns = self
             .handler_methods
             .iter()
             .map(|m| self.generate_message_handler_case(m));
@@ -190,7 +190,7 @@ impl ActorModule<'_> {
         quote::quote! {
             async fn dispatch(&mut self, message: #enum_name) {
                 match message {
-                    #(#message_dispatcher_method)*
+                    #(#patterns)*
                 }
             }
         }
@@ -203,7 +203,7 @@ impl ActorModule<'_> {
         let method_params_names: Vec<_> = method.get_parameter_names();
         if method.has_return_type() {
             quote::quote! {
-                #enum_name::#variant_name { #(#method_params_names),* , respond_to } => {
+                #enum_name::#variant_name { #(#method_params_names,)* respond_to } => {
                     let result = self.#method_name(#(#method_params_names),*).await;
                     respond_to.send(result).unwrap();
                 }
