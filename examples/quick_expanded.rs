@@ -1,6 +1,6 @@
 #[allow(unused)]
 mod actor {
-    use abcgen::{actor, message_handler, AbcgenError, PinnedFuture, Task};
+    use abcgen::{actor, message_handler, send_task, AbcgenError, PinnedFuture, Task};
     #[actor]
     pub struct MyActor {
         pub some_value: i32,
@@ -10,10 +10,7 @@ mod actor {
             println!("Starting");
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                task_sender
-                    .send(Box::new(MyActor::example_task))
-                    .await
-                    .unwrap();
+                send_task ! (task_sender (this) => { this . example_task () . await ; });
             });
         }
         pub async fn shutdown(&mut self) {
@@ -26,10 +23,8 @@ mod actor {
                 _ => Err("Invalid name"),
             }
         }
-        fn example_task(&mut self) -> PinnedFuture<()> {
-            Box::pin(async move {
-                println!("Example task executed");
-            })
+        async fn example_task(&mut self) {
+            println!("Example task executed");
         }
     }
     pub type TaskSender = tokio::sync::mpsc::Sender<Task<MyActor>>;

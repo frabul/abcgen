@@ -22,17 +22,8 @@ mod my_actor_module {
             log::info!("Starting");
             let term_req = self.termination_requested.clone();
             let internal_task = tokio::spawn(async move {
-                Self::invoke(&task_sender, Box::new(Self::dummy_task_2)).unwrap();
-                Self::invoke(
-                    &task_sender,
-                    Box::new(|runnable| {
-                        Box::pin(async {
-                            log::info!("Executing a closure task");
-                            runnable.dummy_task().await;
-                        })
-                    }),
-                )
-                .unwrap();
+                send_task ! (task_sender (this) => { this . dummy_task () . await ; });
+                send_task ! (task_sender (this) => { log :: info ! ("Executing a closure task") ; this . dummy_task () . await ; });
                 while !term_req.load(std::sync::atomic::Ordering::Relaxed) {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     log::info!("Sending ThisHappend");
@@ -64,8 +55,9 @@ mod my_actor_module {
             log::info!("do_this called: par1={}, par2={}", par1, par2);
         }
         #[message_handler]
-        async fn do_that(&mut self) {
+        async fn do_that(&mut self) -> Result<(), ()> {
             log::info!("do_that called");
+            Ok(())
         }
         #[message_handler]
         async fn get_that(&mut self, name: String) -> i32 {
@@ -81,7 +73,9 @@ mod my_actor_module {
             par1: i32,
             par2: String,
         },
-        DoThat {},
+        DoThat {
+            respond_to: tokio::sync::oneshot::Sender<Result<(), ()>>,
+        },
         GetThat {
             name: String,
             respond_to: tokio::sync::oneshot::Sender<i32>,
@@ -124,14 +118,14 @@ mod my_actor_module {
                 .map_err(|e| AbcgenError::ChannelError(Box::new(e)));
             send_res
         }
-        pub async fn do_that(&self) -> Result<(), AbcgenError> {
-            let msg = MyActorMessage::DoThat {};
-            let send_res = self
-                .message_sender
-                .send(msg)
-                .await
-                .map_err(|e| AbcgenError::ChannelError(Box::new(e)));
-            send_res
+        pub async fn do_that(&self) -> Result<Result<(), ()>, AbcgenError> {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let msg = MyActorMessage::DoThat { respond_to: tx };
+            let send_res = self.message_sender.send(msg).await;
+            match send_res {
+                Ok(_) => rx.await.map_err(|e| AbcgenError::ChannelError(Box::new(e))),
+                Err(e) => Err(AbcgenError::ChannelError(Box::new(e))),
+            }
         }
         pub async fn get_that(&self, name: String) -> Result<i32, AbcgenError> {
             let (tx, rx) = tokio::sync::oneshot::channel();
@@ -180,8 +174,9 @@ mod my_actor_module {
                 MyActorMessage::DoThis { par1, par2 } => {
                     self.do_this(par1, par2).await;
                 }
-                MyActorMessage::DoThat {} => {
-                    self.do_that().await;
+                MyActorMessage::DoThat { respond_to } => {
+                    let result = self.do_that().await;
+                    respond_to.send(result).unwrap();
                 }
                 MyActorMessage::GetThat { name, respond_to } => {
                     let result = self.get_that(name).await;

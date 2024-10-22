@@ -1,5 +1,5 @@
 #[allow(unused)]
-mod hello_wordl_actor {
+mod hello_world_actor {
     use abcgen::*;
     #[events]
     #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ mod hello_wordl_actor {
             println!("Hello, World!");
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                Self::invoke(&task_sender, Box::new(Self::still_here)).unwrap();
+                send_task ! (task_sender (this) => { this . still_here () . await ; });
             });
         }
         async fn shutdown(&mut self) {
@@ -144,7 +144,7 @@ mod hello_wordl_actor {
         }
     }
 }
-use hello_wordl_actor::{HelloWorldActor, HelloWorldActorEvent};
+use hello_world_actor::{HelloWorldActor, HelloWorldActorEvent};
 #[tokio::main]
 async fn main() {
     let actor = HelloWorldActor { event_sender: None };

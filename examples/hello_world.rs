@@ -1,6 +1,6 @@
 #[abcgen::actor_module] // this is the attribute that is actually emitting the code by calling a procedural macro
 #[allow(unused)]
-mod hello_wordl_actor {
+mod hello_world_actor {
     use abcgen::*;
 
     // the follow attribute is used to mark the enum defining the events that can be signaled by the actor
@@ -30,8 +30,8 @@ mod hello_wordl_actor {
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 // the following call will send the function Self::still_here to be invoked by the actor's loop
-                // ⚠️ Do not put any sleep in Self::still_here, it will block the actor's loop
-                Self::invoke(&task_sender, Box::new(Self::still_here)).unwrap();
+                // ⚠️ Do not put any sleep in Self::still_here, it will block the actor's loop 
+                send_task!(task_sender(this) => { this.still_here().await; });
             });
         }
 
@@ -73,7 +73,7 @@ mod hello_wordl_actor {
 }
 
 // ---- main.rs ----
-use hello_wordl_actor::{HelloWorldActor, HelloWorldActorEvent};
+use hello_world_actor::{HelloWorldActor, HelloWorldActorEvent};
 
 #[tokio::main]
 async fn main() {

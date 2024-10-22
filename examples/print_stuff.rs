@@ -29,17 +29,13 @@ mod my_actor_module {
             log::info!("Starting");
             let term_req = self.termination_requested.clone();
             let internal_task = tokio::spawn(async move {
-                Self::invoke(&task_sender, Box::new(Self::dummy_task_2)).unwrap();
-                Self::invoke(
-                    &task_sender,
-                    Box::new(|runnable| {
-                        Box::pin(async {
-                            log::info!("Executing a closure task");
-                            runnable.dummy_task().await;
-                        })
-                    }),
-                )
-                .unwrap();
+
+                send_task!( task_sender(this) => { this.dummy_task().await; } );
+                send_task!( task_sender(this) => { 
+                    log::info!("Executing a closure task");
+                    this.dummy_task().await;
+                } ); 
+               
                 while !term_req.load(std::sync::atomic::Ordering::Relaxed) {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     log::info!("Sending ThisHappend");
@@ -77,8 +73,9 @@ mod my_actor_module {
         }
 
         #[message_handler]
-        async fn do_that(&mut self) {
+        async fn do_that(&mut self) -> Result<(), ()> {
             log::info!("do_that called");
+            Ok(())
         }
 
         #[message_handler] // the can also have a return value

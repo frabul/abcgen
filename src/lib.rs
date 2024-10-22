@@ -4,10 +4,10 @@
 //! **abcgen** produces Actor objects that are based on the `async`/`await` syntax and the **tokio** library.
 //! The actor objects generated do not require any scheduler o manager to run, they are standalone and can be used in any (**tokio**) context. 
 //! ```rust 
-//! // Super quick example
 //! #[abcgen::actor_module]
+//! #[allow(unused)]
 //! mod actor {
-//!     use abcgen::{actor, message_handler, AbcgenError, PinnedFuture, Task};
+//!     use abcgen::{actor, message_handler, send_task, AbcgenError, PinnedFuture, Task};
 //! 
 //!     #[actor]
 //!     pub struct MyActor {
@@ -21,17 +21,12 @@
 //!             // or enqueue some tasks into the actor's main loop by sending them to task_sender
 //!             tokio::spawn(async move {
 //!                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-//!                 task_sender
-//!                     .send(Box::new(MyActor::example_task))
-//!                     .await
-//!                     .unwrap();
+//!                 send_task!( task_sender(this) => { this.example_task().await; } );
 //!             });
 //!         }
-//!         
 //!         pub async fn shutdown(&mut self) {
 //!             println!("Shutting down");
 //!         }
-//! 
 //!         #[message_handler]
 //!         async fn get_value(&mut self, name: &'static str) -> Result<i32, &'static str> {
 //!             match name {
@@ -40,10 +35,8 @@
 //!             }
 //!         }
 //! 
-//!         fn example_task(&mut self) -> PinnedFuture<()> {
-//!             Box::pin(async move {
-//!                 println!("Example task executed");
-//!             })
+//!         async fn example_task(&mut self) {
+//!             println!("Example task executed");
 //!         }
 //!     }
 //! }
@@ -75,8 +68,10 @@
 //! - `Actor::invoke(...)` helper method to enqueue a task to be executed in the `actor`'s loop 
 //! - an ActorProxy object that implements all of the methods that were marked with `message_handler` attribute
 //! - a message enum that contains all the messages that the `actor` can receive  (which is not meant to be used directly by the user)
-
-
+//! 
+//! More details can be found in the [README] file.
+//! 
+//! [README]: https://github.com/frabul/abcgen/blob/main/README.md
 use std::{future::Future, pin::Pin};
 
 pub use abcgen_attributes::*;
@@ -102,7 +97,7 @@ pub type Task<TActor> = Box<dyn (for<'b> FnOnce(&'b mut TActor) -> PinnedFuture<
 /// ```
 #[macro_export]
 macro_rules! send_task {
-    ($task_sender:ident => ($this:ident )  { $($tok:tt)* }) => {
+    ($task_sender:ident ($this:ident ) => { $($tok:tt)* }) => {
         let _ = $task_sender.send(Box::new(|$this| Box::pin( async move { $($tok)* }))).await;
     };
 }
