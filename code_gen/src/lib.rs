@@ -1,10 +1,12 @@
 mod actor_messages;
 mod actor_proxy;
+mod actor;
 mod module;
 
 pub use actor_messages::*;
 pub use actor_proxy::*;
 pub use module::*;
+pub use actor::*;
 
 use convert_case::Casing;
 use syn::ReturnType;
