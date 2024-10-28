@@ -45,16 +45,6 @@ impl ActorModule<'_> {
             .iter()
             .flat_map(|item| item.items.iter());
 
-        // find handler methods
-        let mut methods: Vec<MessageHandlerMethod<'a>> = Vec::new();
-        for item in impl_items {
-            if let syn::ImplItem::Fn(m) = item {
-                if m.attrs.iter().any(|a| test_attribute(a, "message_handler")) {
-                    methods.push(MessageHandlerMethod::new(m)?);
-                }
-            }
-        }
-
         // check if there are any events
         let events = extract_events_enum(module_items)?;
         if events.len() > 1 {
@@ -69,7 +59,21 @@ impl ActorModule<'_> {
         validate_start_method(&actor_implementations, &events)?;
         // validate the shutdown method
         validate_shutdown_method(&actor_implementations)?;
-        
+
+        // find handler methods
+        let mut methods: Vec<MessageHandlerMethod<'a>> = Vec::new();
+        for item in impl_items {
+            if let syn::ImplItem::Fn(m) = item {
+                if m.attrs.iter().any(|a| test_attribute(a, "message_handler")) {
+                    methods.push(MessageHandlerMethod::new(m)?);
+                }
+            }
+        }
+
+        // todo check if there is a channel_error( ... ) function ( that is used to create a channel error ) and store its return type
+        // todo check if there is a an already_stopped_error( ... ) function ( that is used to create an already stopped error ) and store its return type
+        // if return type from channel_error is different from return type from already_stopped_error, then return an error
+        // if they are not found they need to be genereated with return type  AbcgenError
 
         // build generators
         let msg_generator = MessageEnum::new(quote::format_ident!("{actor_id}Message"), &methods)?;
@@ -174,9 +178,7 @@ fn validate_start_method(
     Ok(())
 }
 
-fn validate_shutdown_method(
-    actor_implementations: &Vec<&syn::ItemImpl> 
-) -> Result<()> {
+fn validate_shutdown_method(actor_implementations: &Vec<&syn::ItemImpl>) -> Result<()> {
     let the_method = actor_implementations
         .iter()
         .flat_map(|item| item.items.iter())
@@ -190,7 +192,7 @@ fn validate_shutdown_method(
         })
         .collect::<Vec<_>>();
 
-    let the_error_msg = "Expected a shutdown method: `fn shutdown(&mut self)`";    
+    let the_error_msg = "Expected a shutdown method: `fn shutdown(&mut self)`";
     if the_method.len() != 1 {
         return Err(Error::new_spanned(actor_implementations[0], the_error_msg));
     }
