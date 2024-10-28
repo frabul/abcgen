@@ -1,13 +1,14 @@
 use proc_macro2::TokenStream;
-use syn::{Ident, ReturnType};
+use syn::{Ident, ReturnType, Type, TypePath};
 
-use crate::MessageHandlerMethod;
+use crate::{utils::type_path_from_generic_argument, MessageHandlerMethod};
 
 pub struct ActorProxy<'a> {
     pub name: Ident,
     methods: Vec<MessageHandlerMethod<'a>>,
     message_enum: Ident,
     events_enum: Option<&'a Ident>,
+    convertible_errors: Vec<&'a TypePath>,
 }
 
 impl ActorProxy<'_> {
@@ -16,12 +17,14 @@ impl ActorProxy<'_> {
         message_enum: Ident,
         events_enum: Option<&'a Ident>,
         methods: &[MessageHandlerMethod<'a>],
+        convertible_errors: Vec<&'a TypePath>,
     ) -> ActorProxy<'a> {
         ActorProxy {
             name,
             methods: methods.to_vec(),
             message_enum,
             events_enum,
+            convertible_errors,
         }
     }
 
@@ -56,8 +59,8 @@ impl ActorProxy<'_> {
 
                 pub fn stop(&mut self) -> Result<(), AbcgenError> {
                     match self.stop_signal.take() {
-                        Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::AlreadyStopped),
-                        None => Err(AbcgenError::AlreadyStopped),
+                        Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::ActorShutdown),
+                        None => Err(AbcgenError::ActorShutdown),
                     }
                 }
 
@@ -104,15 +107,36 @@ impl ActorProxy<'_> {
             .iter()
             .map(|(name, _)| name)
             .collect::<Vec<_>>();
+
         if let ReturnType::Type(_, ref return_type) = handler.original.sig.output {
-            quote::quote! {
-                pub async fn #fn_name(&self, #(#parameters),*) -> Result<#return_type, AbcgenError> {
-                    let (tx, rx) = tokio::sync::oneshot::channel();
-                    let msg = #message_enum_name::#msg_name { #(#parameters_names,)* respond_to: tx };
-                    let send_res = self.message_sender.send(msg).await;
-                    match send_res {
-                        Ok(_) => rx.await.map_err(|e| AbcgenError::ChannelError(Box::new(e))),
-                        Err(e) => Err(AbcgenError::ChannelError(Box::new(e))),
+            // if the return type is Result<U,V> and V implements From<AbcgenError> then instead of
+            // returning Result<Result<U,V>,AbcgenError> we return Result<U,V> directly
+            let mut can_be_converted = false;
+            if let Type::Path(ref path) = **return_type {
+                can_be_converted = self.check_if_can_be_converted(path);
+            }
+            if can_be_converted {
+                quote::quote! {
+                    pub async fn #fn_name(&self, #(#parameters),*) -> #return_type {
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        let msg = #message_enum_name::#msg_name { #(#parameters_names,)* respond_to: tx };
+                        let send_res = self.message_sender.send(msg).await;
+                        match send_res {
+                            Ok(_) => rx.await.unwrap_or_else(|e| Err(AbcgenError::ActorShutdown.into())),
+                            Err(e) => Err(AbcgenError::ActorShutdown.into()),
+                        }
+                    }
+                }
+            } else {
+                quote::quote! {
+                    pub async fn #fn_name(&self, #(#parameters),*) -> Result<#return_type, AbcgenError> {
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        let msg = #message_enum_name::#msg_name { #(#parameters_names,)* respond_to: tx };
+                        let send_res = self.message_sender.send(msg).await;
+                        match send_res {
+                            Ok(_) => rx.await.map_err(|e| AbcgenError::ActorShutdown),
+                            Err(e) => Err(AbcgenError::ActorShutdown),
+                        }
                     }
                 }
             }
@@ -120,10 +144,41 @@ impl ActorProxy<'_> {
             quote::quote! {
                 pub async fn #fn_name(&self, #(#parameters),*) -> Result<(), AbcgenError> {
                     let msg = #message_enum_name::#msg_name { #(#parameters_names),* };
-                    let send_res = self.message_sender.send(msg).await.map_err(|e| AbcgenError::ChannelError(Box::new(e)));
+                    let send_res = self.message_sender.send(msg).await.map_err(|e| AbcgenError::ActorShutdown );
                     send_res
                 }
             }
         }
+    }
+
+    fn check_if_can_be_converted(&self, path: &TypePath) -> bool {
+        // path her is something like Result<U,V>
+        let mut can_be_converted = false;
+        if let Some(segment) = path.path.segments.last() {
+            if segment.ident == "Result" {
+                match &segment.arguments {
+                    syn::PathArguments::None => {}
+                    syn::PathArguments::AngleBracketed(args) => {
+                        let err_type = if args.args.len() == 2 {
+                            type_path_from_generic_argument(&args.args[1])
+                        } else if args.args.len() == 1 {
+                            type_path_from_generic_argument(&args.args[0])
+                        } else {
+                            None
+                        };
+                        if let Some(err_type) = err_type {
+                            for ty in self.convertible_errors.iter() {
+                                if crate::utils::compare_type_path(&err_type, ty) {
+                                    can_be_converted = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    syn::PathArguments::Parenthesized(_) => {}
+                }
+            }
+        }
+        can_be_converted
     }
 }

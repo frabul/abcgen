@@ -1,15 +1,27 @@
+mod actor;
 mod actor_messages;
 mod actor_proxy;
-mod actor;
 mod module;
+mod utils;
 
+pub use actor::*;
 pub use actor_messages::*;
 pub use actor_proxy::*;
 pub use module::*;
-pub use actor::*;
 
 use convert_case::Casing;
 use syn::ReturnType;
+
+/// Configuration for the code generator
+pub struct Config {
+    pub channels_size: usize,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config { channels_size: 20 }
+    }
+}
 
 #[derive(Clone)]
 pub struct MessageHandlerMethod<'a> {

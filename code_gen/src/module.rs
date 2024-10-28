@@ -1,18 +1,18 @@
-use proc_macro2::TokenStream;
-use syn::{Error, Ident, Item, ItemMod, Result, Type};
+use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
+use syn::{spanned::Spanned, Error, Ident, ImplItem, Item, ItemMod, Result, Type};
 
-use crate::{ActorProxy, MessageEnum, MessageHandlerMethod};
+use crate::{utils::type_path_from_type, Actor, ActorProxy, Config, MessageEnum, MessageHandlerMethod};
 
 pub struct ActorModule<'a> {
-    actor_ident: &'a Ident,
-    handler_methods: Vec<MessageHandlerMethod<'a>>,
-    events: Option<&'a Ident>,
-    message_enum: MessageEnum<'a>,
-    proxy: ActorProxy<'a>,
+    pub(crate) actor: Actor<'a>, 
+    pub(crate) events: Option<&'a Ident>,
+    pub(crate) message_enum: MessageEnum<'a>,
+    pub(crate) proxy: ActorProxy<'a>,
 }
 
 impl ActorModule<'_> {
-    pub fn new<'a>(module: &'a ItemMod) -> Result<ActorModule<'a>> {
+    pub fn new<'a>(module: &'a ItemMod, config: &'a Config) -> Result<ActorModule<'a>> {
         let module_items = &module
             .content
             .as_ref()
@@ -27,23 +27,21 @@ impl ActorModule<'_> {
         if actors.len() != 1 {
             return Err(Error::new_spanned(
                 module,
-                "Expected exactly one actor that is one struct or enum with #[actor] attribute",
+                "Expected exactly one actor, that is one struct or enum with #[actor] attribute.",
             ));
         }
+        let actor = actors[0];
         let actor_id = match actors[0] {
             Item::Struct(it) => &it.ident,
             Item::Enum(it) => &it.ident,
             _ => unreachable!(),
         };
 
-        let actor_implementations = module_items
+        let actor_implementations_items = module_items
             .iter()
             .filter_map(|item| is_impl_of(item, actor_id))
+            .flat_map(|item| item.items.iter())
             .collect::<Vec<_>>();
-
-        let impl_items = actor_implementations
-            .iter()
-            .flat_map(|item| item.items.iter());
 
         // check if there are any events
         let events = extract_events_enum(module_items)?;
@@ -56,13 +54,13 @@ impl ActorModule<'_> {
         let events = events.into_iter().next();
 
         // validate the start method
-        validate_start_method(&actor_implementations, &events)?;
+        validate_start_method(&actor_implementations_items, &events, actor.span())?;
         // validate the shutdown method
-        validate_shutdown_method(&actor_implementations)?;
+        validate_shutdown_method(&actor_implementations_items, actor.span())?;
 
         // find handler methods
         let mut methods: Vec<MessageHandlerMethod<'a>> = Vec::new();
-        for item in impl_items {
+        for item in actor_implementations_items {
             if let syn::ImplItem::Fn(m) = item {
                 if m.attrs.iter().any(|a| test_attribute(a, "message_handler")) {
                     methods.push(MessageHandlerMethod::new(m)?);
@@ -70,10 +68,12 @@ impl ActorModule<'_> {
             }
         }
 
-        // todo check if there is a channel_error( ... ) function ( that is used to create a channel error ) and store its return type
-        // todo check if there is a an already_stopped_error( ... ) function ( that is used to create an already stopped error ) and store its return type
-        // if return type from channel_error is different from return type from already_stopped_error, then return an error
-        // if they are not found they need to be genereated with return type  AbcgenError
+        // todo find all of the implementations of trait From<abcgen::AbcgenError>
+        let convertible_errors = find_convertible_error_types(module_items);
+        let convertible_errors = convertible_errors
+            .iter()
+            .map(|t| type_path_from_type(t).unwrap())
+            .collect::<Vec<_>>();
 
         // build generators
         let msg_generator = MessageEnum::new(quote::format_ident!("{actor_id}Message"), &methods)?;
@@ -82,11 +82,18 @@ impl ActorModule<'_> {
             msg_generator.name.clone(),
             events,
             &methods,
+            convertible_errors,
         );
-
-        Ok(ActorModule {
-            actor_ident: actor_id,
+        // build actor
+        let actor = Actor {
+            ident: actor_id,
+            generic_params: None,
             handler_methods: methods.clone(),
+            msg_chan_size: config.channels_size,
+            task_chan_size: config.channels_size,
+        };
+        Ok(ActorModule {
+            actor, 
             events: events.into_iter().next(),
             message_enum: msg_generator,
             proxy,
@@ -94,7 +101,7 @@ impl ActorModule<'_> {
     }
 
     pub fn generate(&self) -> Result<TokenStream> {
-        let struct_name = self.actor_ident;
+        let struct_name = self.actor.ident;
         let event_sender_alias = match self.events.as_ref() {
             Some(events) => {
                 quote::quote! { type EventSender = tokio::sync::broadcast::Sender<#events>;               }
@@ -105,27 +112,50 @@ impl ActorModule<'_> {
 
         let message_enum_code = self.message_enum.generate()?;
         let proxy_code = self.proxy.generate();
-        let code = quote::quote! {
+        let actor = self.actor.generate(self);
 
+        let code = quote::quote! {
             #event_sender_alias
             pub type TaskSender = tokio::sync::mpsc::Sender<Task<#struct_name>>;
-
             #message_enum_code
+            #actor
             #proxy_code
-            #actor_impl
+            //#actor_impl
         };
 
         Ok(code)
     }
 }
 
+fn find_convertible_error_types(module_items: &Vec<Item>) -> Vec<&Type> {
+    let possible_types = [
+        quote::quote! { From<::abcgen::AbcgenError> }.to_string(),
+        quote::quote! { From<abcgen::AbcgenError> }.to_string(),
+        quote::quote! { From<AbcgenError> }.to_string(),
+    ];
+    let mut res = Vec::new();
+    for item in module_items {
+        if let Item::Impl(impl_item) = item {
+            if let Some((_, t_trait, _)) = impl_item.trait_.as_ref() {
+                if possible_types
+                    .iter()
+                    .any(|t| *t == t_trait.to_token_stream().to_string())
+                {
+                    res.push(impl_item.self_ty.as_ref());
+                }
+            }
+        }
+    }
+    res
+}
+
 fn validate_start_method(
-    actor_implementations: &Vec<&syn::ItemImpl>,
+    actor_implementations_items: &Vec<&ImplItem>,
     events: &Option<&Ident>,
+    span: Span,
 ) -> Result<()> {
-    let start_method = actor_implementations
+    let start_method = actor_implementations_items
         .iter()
-        .flat_map(|item| item.items.iter())
         .filter_map(|item| {
             if let syn::ImplItem::Fn(m) = item {
                 if m.sig.ident == "start" {
@@ -137,13 +167,13 @@ fn validate_start_method(
         .collect::<Vec<_>>();
 
     let the_error_msg = if events.is_some() {
-        "Expected a start method: `fn start(&mut self, task_sender: TaskSender, event_sender: EventSender)`"
+        "Expected a start method to be implemented for the actor: `fn start(&mut self, task_sender: TaskSender, event_sender: EventSender)`"
     } else {
-        "Expected a start method: `fn start(&mut self, task_sender: TaskSender)`"
+        "Expected a start method to be implemented for the actor: `fn start(&mut self, task_sender: TaskSender)`"
     };
 
     if start_method.len() != 1 {
-        return Err(Error::new_spanned(actor_implementations[0], the_error_msg));
+        return Err(Error::new(span.clone(), the_error_msg));
     }
     // start method found
     let start_method = start_method[0];
@@ -178,10 +208,9 @@ fn validate_start_method(
     Ok(())
 }
 
-fn validate_shutdown_method(actor_implementations: &Vec<&syn::ItemImpl>) -> Result<()> {
+fn validate_shutdown_method(actor_implementations: &Vec<&ImplItem>, span: Span) -> Result<()> {
     let the_method = actor_implementations
         .iter()
-        .flat_map(|item| item.items.iter())
         .filter_map(|item| {
             if let syn::ImplItem::Fn(m) = item {
                 if m.sig.ident == "shutdown" {
@@ -192,9 +221,10 @@ fn validate_shutdown_method(actor_implementations: &Vec<&syn::ItemImpl>) -> Resu
         })
         .collect::<Vec<_>>();
 
-    let the_error_msg = "Expected a shutdown method: `fn shutdown(&mut self)`";
+    let the_error_msg =
+        "Expected a shutdown method to be implemented for the actor: `fn shutdown(&mut self)`";
     if the_method.len() != 1 {
-        return Err(Error::new_spanned(actor_implementations[0], the_error_msg));
+        return Err(Error::new(span, the_error_msg));
     }
     // start method found
     let the_method = the_method[0];

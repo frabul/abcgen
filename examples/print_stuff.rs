@@ -29,13 +29,12 @@ mod my_actor_module {
             log::info!("Starting");
             let term_req = self.termination_requested.clone();
             let internal_task = tokio::spawn(async move {
-
                 send_task!( task_sender(this) => { this.dummy_task().await; } );
-                send_task!( task_sender(this) => { 
+                send_task!( task_sender(this) => {
                     log::info!("Executing a closure task");
                     this.dummy_task().await;
-                } ); 
-               
+                } );
+
                 while !term_req.load(std::sync::atomic::Ordering::Relaxed) {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     log::info!("Sending ThisHappend");
