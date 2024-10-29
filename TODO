@@ -1,5 +1,3 @@
-- Check that start and shutdown methods are correctly implemented for the actor
-- Helper method that allows functions to subscribe to events 
-- implement the possibility to specify channels size
-- support generics on message signature
-- support generics on the actor
+- copy doc strings from actor handlers to proxy callers
+- Helper method that allows functions to be subscribed for events 
+- support generics on the actor 

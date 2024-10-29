@@ -17,7 +17,6 @@ The actor objects generated do not require any scheduler o manager to run, they 
     - handling of stop signal
     - handling of messages (support replies)
     - handling of tasks (functions that can be enqueued to be invoked in the `actor`'s loop so the can access `&mut Actor`)
-- `Actor::invoke(...)` helper method to enqueue a task to be executed in the `actor`'s loop 
 - an ActorProxy object that implements all of the methods that were marked with `message_handler` attribute
 - a message enum that contains all the messages that the `actor` can receive  (which is not meant to be used directly by the user)
 

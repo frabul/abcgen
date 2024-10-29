@@ -1,18 +1,18 @@
-use proc_macro2::TokenStream;
-use syn::{Error, Ident, Item, ItemMod, Result, Type};
+use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
+use syn::{spanned::Spanned, Error, Ident, ImplItem, Item, ItemMod, Result, Type};
 
-use crate::{ActorProxy, MessageEnum, MessageHandlerMethod};
+use crate::{utils::type_path_from_type, Actor, ActorProxy, Config, MessageEnum, MessageHandlerMethod};
 
 pub struct ActorModule<'a> {
-    actor_ident: &'a Ident,
-    handler_methods: Vec<MessageHandlerMethod<'a>>,
-    events: Option<&'a Ident>,
-    message_enum: MessageEnum<'a>,
-    proxy: ActorProxy<'a>,
+    pub(crate) actor: Actor<'a>, 
+    pub(crate) events: Option<&'a Ident>,
+    pub(crate) message_enum: MessageEnum<'a>,
+    pub(crate) proxy: ActorProxy<'a>,
 }
 
 impl ActorModule<'_> {
-    pub fn new<'a>(module: &'a ItemMod) -> Result<ActorModule<'a>> {
+    pub fn new<'a>(module: &'a ItemMod, config: &'a Config) -> Result<ActorModule<'a>> {
         let module_items = &module
             .content
             .as_ref()
@@ -27,32 +27,21 @@ impl ActorModule<'_> {
         if actors.len() != 1 {
             return Err(Error::new_spanned(
                 module,
-                "Expected exactly one actor that is one struct or enum with #[actor] attribute",
+                "Expected exactly one actor, that is one struct or enum with #[actor] attribute.",
             ));
         }
+        let actor = actors[0];
         let actor_id = match actors[0] {
             Item::Struct(it) => &it.ident,
             Item::Enum(it) => &it.ident,
             _ => unreachable!(),
         };
 
-        // find handler methods
-        let actor_implementations = module_items
+        let actor_implementations_items = module_items
             .iter()
             .filter_map(|item| is_impl_of(item, actor_id))
+            .flat_map(|item| item.items.iter())
             .collect::<Vec<_>>();
-
-        let impl_items = actor_implementations
-            .iter()
-            .flat_map(|item| item.items.iter());
-        let mut methods: Vec<MessageHandlerMethod<'a>> = Vec::new();
-        for item in impl_items {
-            if let syn::ImplItem::Fn(m) = item {
-                if m.attrs.iter().any(|a| test_attribute(a, "message_handler")) {
-                    methods.push(MessageHandlerMethod::new(m)?);
-                }
-            }
-        }
 
         // check if there are any events
         let events = extract_events_enum(module_items)?;
@@ -63,6 +52,29 @@ impl ActorModule<'_> {
             ));
         }
         let events = events.into_iter().next();
+
+        // validate the start method
+        validate_start_method(&actor_implementations_items, &events, actor.span())?;
+        // validate the shutdown method
+        validate_shutdown_method(&actor_implementations_items, actor.span())?;
+
+        // find handler methods
+        let mut methods: Vec<MessageHandlerMethod<'a>> = Vec::new();
+        for item in actor_implementations_items {
+            if let syn::ImplItem::Fn(m) = item {
+                if m.attrs.iter().any(|a| test_attribute(a, "message_handler")) {
+                    methods.push(MessageHandlerMethod::new(m)?);
+                }
+            }
+        }
+
+        // todo find all of the implementations of trait From<abcgen::AbcgenError>
+        let convertible_errors = find_convertible_error_types(module_items);
+        let convertible_errors = convertible_errors
+            .iter()
+            .map(|t| type_path_from_type(t).unwrap())
+            .collect::<Vec<_>>();
+
         // build generators
         let msg_generator = MessageEnum::new(quote::format_ident!("{actor_id}Message"), &methods)?;
         let proxy = ActorProxy::new(
@@ -70,11 +82,18 @@ impl ActorModule<'_> {
             msg_generator.name.clone(),
             events,
             &methods,
+            convertible_errors,
         );
-
-        Ok(ActorModule {
-            actor_ident: actor_id,
+        // build actor
+        let actor = Actor {
+            ident: actor_id,
+            generic_params: None,
             handler_methods: methods.clone(),
+            msg_chan_size: config.channels_size,
+            task_chan_size: config.channels_size,
+        };
+        Ok(ActorModule {
+            actor, 
             events: events.into_iter().next(),
             message_enum: msg_generator,
             proxy,
@@ -82,139 +101,164 @@ impl ActorModule<'_> {
     }
 
     pub fn generate(&self) -> Result<TokenStream> {
-        let proxy = &self.proxy.name;
-        let message_dispatcher_method = self.generate_dispatcher_method();
-        let messages_enum_name = &self.message_enum.name;
-        let struct_name = self.actor_ident;
-        let (events1, events2, events3, event_sender_alias) = match self.events.as_ref() {
-            Some(events) => (
-                quote::quote! { let (event_sender, _) = tokio::sync::broadcast::channel::<#events>(20);  
-                                let event_sender_clone = event_sender.clone();                            }, 
-                quote::quote! { ,event_sender_clone                                                       },
-                quote::quote! { events: event_sender,                                                     },
-                quote::quote! { type EventSender = tokio::sync::broadcast::Sender<#events>;               },
-            ),
-            None => (
-                TokenStream::new(),
-                TokenStream::new(),
-                TokenStream::new(),
-                TokenStream::new(),
-            ),
-        };
-        let actor_impl = quote::quote! {
-            impl #struct_name {
-                pub fn run(self) -> #proxy {
-                    let (msg_sender, mut msg_receiver) = tokio::sync::mpsc::channel(20);
-                    #events1
-                    let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel::<()>();
-                    let (task_sender, mut task_receiver) = tokio::sync::mpsc::channel::<Task<#struct_name>>(20);
-                    tokio::spawn(async move {
-                        let mut actor = self;
-                        actor.start(task_sender  #events2 ).await;
-                        tokio::select! {
-                            _ = actor.select_receivers(&mut msg_receiver, &mut task_receiver) => { log::debug!("(abcgen) all proxies dropped"); }  // all proxies were dropped => shutdown
-                            _ = stop_receiver => { log::debug!("(abcgen) stop signal received"); } // stop signal received => shutdown
-                        }
-                        // we get here when the actor is done
-                        actor.shutdown().await;
-                    });
-
-                    // build the proxy
-                    let proxy = #proxy {
-                        message_sender: msg_sender,
-                        stop_signal: Some(stop_sender),
-                        #events3
-                    };
-
-                    proxy
-                }
-
-                async fn select_receivers(
-                    &mut self,
-                    msg_receiver: &mut tokio::sync::mpsc::Receiver<#messages_enum_name>,
-                    task_receiver: &mut tokio::sync::mpsc::Receiver<Task<#struct_name>>,
-                ) {
-                    loop {
-                        tokio::select! {
-                            msg = msg_receiver.recv() => {
-                                match msg {
-                                    Some(msg) => { self.dispatch(msg).await; }
-                                    None => { break; } // channel closed => shutdown
-                                }
-                            },
-                            task = task_receiver.recv() => {
-                                if let Some(task) = task {
-                                    task(self).await;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                #message_dispatcher_method
-
-                /// Helper function to send a task to be invoked in the actor loop
-                fn invoke(sender: &tokio::sync::mpsc::Sender<Task<#struct_name>>, task: Task<#struct_name>) -> Result<(), AbcgenError> {
-                    sender.try_send(task)
-                          .map_err(|e| AbcgenError::ChannelError(Box::new(e)))
-                }
-                //fn invoke_fn(sender: &tokio::sync::mpsc::Sender<Task<#struct_name>>, f: fn(&mut #struct_name) -> PinnedFuture<()> + Send>) -> Result<(), AbcgenError> {
-                //    Self::invoke_task(sender, Box::new(move |actor| f(actor)))
-                //}
-
+        let struct_name = self.actor.ident;
+        let event_sender_alias = match self.events.as_ref() {
+            Some(events) => {
+                quote::quote! { type EventSender = tokio::sync::broadcast::Sender<#events>;               }
             }
 
+            None => TokenStream::new(),
         };
 
         let message_enum_code = self.message_enum.generate()?;
         let proxy_code = self.proxy.generate();
-        let code = quote::quote! {
+        let actor = self.actor.generate(self);
 
+        let code = quote::quote! {
             #event_sender_alias
             pub type TaskSender = tokio::sync::mpsc::Sender<Task<#struct_name>>;
-
             #message_enum_code
+            #actor
             #proxy_code
-            #actor_impl
+            //#actor_impl
         };
 
         Ok(code)
     }
+}
 
-    pub fn generate_dispatcher_method(&self) -> TokenStream {
-        let patterns = self
-            .handler_methods
-            .iter()
-            .map(|m| self.generate_message_handler_case(m));
-        let enum_name = &self.message_enum.name;
-        quote::quote! {
-            async fn dispatch(&mut self, message: #enum_name) {
-                match message {
-                    #(#patterns)*
+fn find_convertible_error_types(module_items: &Vec<Item>) -> Vec<&Type> {
+    let possible_types = [
+        quote::quote! { From<::abcgen::AbcgenError> }.to_string(),
+        quote::quote! { From<abcgen::AbcgenError> }.to_string(),
+        quote::quote! { From<AbcgenError> }.to_string(),
+    ];
+    let mut res = Vec::new();
+    for item in module_items {
+        if let Item::Impl(impl_item) = item {
+            if let Some((_, t_trait, _)) = impl_item.trait_.as_ref() {
+                if possible_types
+                    .iter()
+                    .any(|t| *t == t_trait.to_token_stream().to_string())
+                {
+                    res.push(impl_item.self_ty.as_ref());
                 }
             }
         }
     }
-    pub fn generate_message_handler_case(&self, method: &MessageHandlerMethod) -> TokenStream {
-        let method_name = method.get_name_snake_case();
-        let variant_name = method.get_name_camel_case();
-        let enum_name = &self.message_enum.name;
+    res
+}
 
-        let method_params_names: Vec<_> = method.get_parameter_names();
-        if method.has_return_type() {
-            quote::quote! {
-                #enum_name::#variant_name { #(#method_params_names,)* respond_to } => {
-                    let result = self.#method_name(#(#method_params_names),*).await;
-                    respond_to.send(result).unwrap();
+fn validate_start_method(
+    actor_implementations_items: &Vec<&ImplItem>,
+    events: &Option<&Ident>,
+    span: Span,
+) -> Result<()> {
+    let start_method = actor_implementations_items
+        .iter()
+        .filter_map(|item| {
+            if let syn::ImplItem::Fn(m) = item {
+                if m.sig.ident == "start" {
+                    return Some(m);
                 }
             }
-        } else {
-            quote::quote! {
-                #enum_name::#variant_name { #(#method_params_names),* } => {
-                    self.#method_name(#(#method_params_names),*).await;
+            None
+        })
+        .collect::<Vec<_>>();
+
+    let the_error_msg = if events.is_some() {
+        "Expected a start method to be implemented for the actor: `fn start(&mut self, task_sender: TaskSender, event_sender: EventSender)`"
+    } else {
+        "Expected a start method to be implemented for the actor: `fn start(&mut self, task_sender: TaskSender)`"
+    };
+
+    if start_method.len() != 1 {
+        return Err(Error::new(span.clone(), the_error_msg));
+    }
+    // start method found
+    let start_method = start_method[0];
+    let the_error = Error::new_spanned(start_method, the_error_msg);
+    // check the receiver input
+    let receiver_ok = start_method
+        .sig
+        .receiver()
+        .is_some_and(|r| r.reference.is_some());
+    if !receiver_ok {
+        return Err(the_error);
+    }
+    // check the number of parameters and their types
+    let other_inputs = start_method.sig.inputs.iter().skip(1).collect::<Vec<_>>();
+    if events.is_some() {
+        if other_inputs.len() != 2 {
+            return Err(the_error);
+        }
+        if !check_argument_type(&other_inputs[1], "EventSender")
+            || !check_argument_type(&other_inputs[0], "TaskSender")
+        {
+            return Err(the_error);
+        }
+    } else {
+        if other_inputs.len() != 1 {
+            return Err(the_error);
+        }
+        if !check_argument_type(&other_inputs[0], "TaskSender") {
+            return Err(the_error);
+        }
+    }
+    Ok(())
+}
+
+fn validate_shutdown_method(actor_implementations: &Vec<&ImplItem>, span: Span) -> Result<()> {
+    let the_method = actor_implementations
+        .iter()
+        .filter_map(|item| {
+            if let syn::ImplItem::Fn(m) = item {
+                if m.sig.ident == "shutdown" {
+                    return Some(m);
                 }
+            }
+            None
+        })
+        .collect::<Vec<_>>();
+
+    let the_error_msg =
+        "Expected a shutdown method to be implemented for the actor: `fn shutdown(&mut self)`";
+    if the_method.len() != 1 {
+        return Err(Error::new(span, the_error_msg));
+    }
+    // start method found
+    let the_method = the_method[0];
+    let the_error = Error::new_spanned(the_method, the_error_msg);
+    // check the receiver input
+    let receiver_ok = the_method
+        .sig
+        .receiver()
+        .is_some_and(|r| r.reference.is_some());
+    if !receiver_ok {
+        return Err(the_error);
+    }
+    // check the number of parameters and their types
+    let other_inputs = the_method.sig.inputs.iter().skip(1).collect::<Vec<_>>();
+    if !other_inputs.is_empty() {
+        return Err(the_error);
+    }
+    Ok(())
+}
+
+fn check_argument_type(other_inputs: &syn::FnArg, expected_type: &str) -> bool {
+    match other_inputs {
+        syn::FnArg::Typed(t) => {
+            if let Type::Path(tp) = t.ty.as_ref() {
+                if tp.path.segments.last().unwrap().ident != expected_type {
+                    false
+                } else {
+                    true
+                }
+            } else {
+                false
             }
         }
+        _ => false,
     }
 }
 
