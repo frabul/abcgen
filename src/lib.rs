@@ -3,7 +3,7 @@
 //! The user should only focus on the logic of the service that the actor is going to provide.
 //! **abcgen** produces Actor objects that are based on the `async`/`await` syntax and the **tokio** library.
 //! The actor objects generated do not require any scheduler o manager to run, they are standalone and can be used in any (**tokio**) context.
-//! 
+//!
 //! ## Basic example
 //! The following example is minimale and does not shocase all the features of the library.
 //! Check the [README] for more details.
@@ -68,7 +68,7 @@
 //!     - calling the `shutdown(&mut self)` method after exiting the `actor`'s loop
 //!     - handling of stop signal
 //!     - handling of messages (support replies)
-//!     - handling of tasks (functions that can be enqueued to be invoked in the `actor`'s loop so the can access `&mut Actor`) 
+//!     - handling of tasks (functions that can be enqueued to be invoked in the `actor`'s loop so the can access `&mut Actor`)
 //! - an ActorProxy object that implements all of the methods that were marked with `message_handler` attribute
 //! - a message enum that contains all the messages that the `actor` can receive  (which is not meant to be used directly by the user)
 //!

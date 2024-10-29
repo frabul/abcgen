@@ -12,7 +12,8 @@ use ab_code_gen::*;
 /// - all the needed logic for the actor
 ///
 /// It support following arguments as key-value pairs:
-/// - `channels_size`: the size of the channels used to communicate with the actor. Default is 20.
+/// - `channels_size`: the size of the messages and task sender channels. Default is 10.
+/// - `events_chan_size`: the size of the channel used to send events to the actor. Default is 10.
 #[proc_macro_attribute]
 pub fn actor_module(args: TokenStream, input: TokenStream) -> TokenStream {
     let parser = syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
@@ -46,7 +47,7 @@ pub fn actor_module(args: TokenStream, input: TokenStream) -> TokenStream {
 fn get_config(
     args: syn::punctuated::Punctuated<syn::Expr, syn::token::Comma>,
 ) -> syn::Result<Config> {
-    let mut config = Config { channels_size: 20 };
+    let mut config = Config::default();
 
     for arg in args {
         match arg {
@@ -57,8 +58,12 @@ fn get_config(
                         "channels_size" => {
                             config.channels_size = parse_usize(&expr_assign.right)?;
                         }
+                        "events_chan_size" => {
+                            config.events_chan_size = parse_usize(&expr_assign.right)?;
+                        }
                         _ => {
-                            return Err(syn::Error::new_spanned(ident, "Unsupported argument"));
+                            return Err(syn::Error::new_spanned(ident,
+                                "Unsupported argument.\nSupported arguments are: \n- `channels_size`\n- `events_chan_size`"));
                         }
                     }
                 }
@@ -110,11 +115,17 @@ fn parse_usize(expr: &syn::Expr) -> syn::Result<usize> {
                 let value = lit_int.base10_parse::<usize>();
                 match value {
                     Ok(v) => Ok(v),
-                    Err(_) => Err(syn::Error::new_spanned(lit_int, "Invalid value, literal usize expected.")),
+                    Err(_) => Err(syn::Error::new_spanned(
+                        lit_int,
+                        "Invalid value, literal usize expected.",
+                    )),
                 }
             }
             _ => Err(syn::Error::new_spanned(expr_lit, "Invalid value")),
         },
-        _ => Err(syn::Error::new_spanned(expr, "Invalid expression, `key=value` expected.")),
+        _ => Err(syn::Error::new_spanned(
+            expr,
+            "Invalid expression, `key=value` expected.",
+        )),
     }
 }

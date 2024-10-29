@@ -2,10 +2,12 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use syn::{spanned::Spanned, Error, Ident, ImplItem, Item, ItemMod, Result, Type};
 
-use crate::{utils::type_path_from_type, Actor, ActorProxy, Config, MessageEnum, MessageHandlerMethod};
+use crate::{
+    utils::type_path_from_type, Actor, ActorProxy, Config, MessageEnum, MessageHandlerMethod,
+};
 
 pub struct ActorModule<'a> {
-    pub(crate) actor: Actor<'a>, 
+    pub(crate) actor: Actor<'a>,
     pub(crate) events: Option<&'a Ident>,
     pub(crate) message_enum: MessageEnum<'a>,
     pub(crate) proxy: ActorProxy<'a>,
@@ -91,9 +93,10 @@ impl ActorModule<'_> {
             handler_methods: methods.clone(),
             msg_chan_size: config.channels_size,
             task_chan_size: config.channels_size,
+            events_chan_size: config.events_chan_size,
         };
         Ok(ActorModule {
-            actor, 
+            actor,
             events: events.into_iter().next(),
             message_enum: msg_generator,
             proxy,

@@ -15,11 +15,15 @@ use syn::ReturnType;
 /// Configuration for the code generator
 pub struct Config {
     pub channels_size: usize,
+    pub events_chan_size: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { channels_size: 20 }
+        Config {
+            channels_size: 10,
+            events_chan_size: 10,
+        }
     }
 }
 

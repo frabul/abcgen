@@ -10,6 +10,7 @@ pub struct Actor<'a> {
     pub(crate) handler_methods: Vec<MessageHandlerMethod<'a>>,
     pub(crate) msg_chan_size: usize,
     pub(crate) task_chan_size: usize,
+    pub(crate) events_chan_size: usize,
 }
 
 impl<'a> Actor<'a> {
@@ -18,6 +19,7 @@ impl<'a> Actor<'a> {
             ident: struct_name,
             msg_chan_size,
             task_chan_size,
+            events_chan_size,
             generic_params,
             ..
         } = self;
@@ -30,7 +32,7 @@ impl<'a> Actor<'a> {
 
         let (events1, events2, events3) = match events {
             Some(events) => (
-                quote::quote! { let (event_sender, _) = tokio::sync::broadcast::channel::<#events>(20);
+                quote::quote! { let (event_sender, _) = tokio::sync::broadcast::channel::<#events>(#events_chan_size);
                 let event_sender_clone = event_sender.clone();                            },
                 quote::quote! { ,event_sender_clone                                                       },
                 quote::quote! { events: event_sender,                                                     },
@@ -88,7 +90,7 @@ impl<'a> Actor<'a> {
                     }
                 }
 
-                #message_dispatcher_method 
+                #message_dispatcher_method
             }
 
         }
