@@ -93,8 +93,8 @@ pub type Task<TActor> = Box<dyn (for<'b> FnOnce(&'b mut TActor) -> PinnedFuture<
 /// and send it trough the `task_sender`.
 /// Example:
 /// ```rust
-/// send_task!(task_sender => (this) {
-///    this.some_field = 123;
+/// send_task!(task_sender(this) => {
+///    this.some_field = this.do_something().await;
 /// });
 /// ```
 #[macro_export]
@@ -110,5 +110,5 @@ pub enum AbcgenError {
     #[error("Service is already stopped")]
     ActorShutDown,
     #[error("Failed to send message. Channel overrun or service stopped.")]
-    ChannelError(#[source] Box<dyn std::error::Error>),
+    ChannelError(#[source] Box<dyn std::error::Error + Sync + Send>),
 }
