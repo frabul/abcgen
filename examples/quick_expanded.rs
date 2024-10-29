@@ -35,51 +35,12 @@ mod actor {
             respond_to: tokio::sync::oneshot::Sender<Result<i32, &'static str>>,
         },
     }
-    pub struct MyActorProxy {
-        message_sender: tokio::sync::mpsc::Sender<MyActorMessage>,
-        stop_signal: std::option::Option<tokio::sync::oneshot::Sender<()>>,
-    }
-    impl MyActorProxy {
-        pub fn is_running(&self) -> bool {
-            match self.stop_signal.as_ref() {
-                Some(s) => !s.is_closed(),
-                None => false,
-            }
-        }
-        pub fn stop(&mut self) -> Result<(), AbcgenError> {
-            match self.stop_signal.take() {
-                Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::AlreadyStopped),
-                None => Err(AbcgenError::AlreadyStopped),
-            }
-        }
-        pub async fn stop_and_wait(&mut self) -> Result<(), AbcgenError> {
-            self.stop()?;
-            while self.is_running() {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-            Ok(())
-        }
-        pub async fn get_value(
-            &self,
-            name: &'static str,
-        ) -> Result<Result<i32, &'static str>, AbcgenError> {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let msg = MyActorMessage::GetValue {
-                name,
-                respond_to: tx,
-            };
-            let send_res = self.message_sender.send(msg).await;
-            match send_res {
-                Ok(_) => rx.await.map_err(|e| AbcgenError::ChannelError(Box::new(e))),
-                Err(e) => Err(AbcgenError::ChannelError(Box::new(e))),
-            }
-        }
-    }
     impl MyActor {
         pub fn run(self) -> MyActorProxy {
-            let (msg_sender, mut msg_receiver) = tokio::sync::mpsc::channel(20);
+            let (msg_sender, mut msg_receiver) = tokio::sync::mpsc::channel(10usize);
             let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel::<()>();
-            let (task_sender, mut task_receiver) = tokio::sync::mpsc::channel::<Task<MyActor>>(20);
+            let (task_sender, mut task_receiver) =
+                tokio::sync::mpsc::channel::<Task<MyActor>>(10usize);
             tokio::spawn(async move {
                 let mut actor = self;
                 actor.start(task_sender).await;
@@ -109,14 +70,45 @@ mod actor {
                 }
             }
         }
-        #[doc = r" Helper function to send a task to be invoked in the actor loop"]
-        fn invoke(
-            sender: &tokio::sync::mpsc::Sender<Task<MyActor>>,
-            task: Task<MyActor>,
-        ) -> Result<(), AbcgenError> {
-            sender
-                .try_send(task)
-                .map_err(|e| AbcgenError::ChannelError(Box::new(e)))
+    }
+    pub struct MyActorProxy {
+        message_sender: tokio::sync::mpsc::Sender<MyActorMessage>,
+        stop_signal: std::option::Option<tokio::sync::oneshot::Sender<()>>,
+    }
+    impl MyActorProxy {
+        pub fn is_running(&self) -> bool {
+            match self.stop_signal.as_ref() {
+                Some(s) => !s.is_closed(),
+                None => false,
+            }
+        }
+        pub fn stop(&mut self) -> Result<(), AbcgenError> {
+            match self.stop_signal.take() {
+                Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::ActorShutDown),
+                None => Err(AbcgenError::ActorShutDown),
+            }
+        }
+        pub async fn stop_and_wait(&mut self) -> Result<(), AbcgenError> {
+            self.stop()?;
+            while self.is_running() {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            Ok(())
+        }
+        pub async fn get_value(
+            &self,
+            name: &'static str,
+        ) -> Result<Result<i32, &'static str>, AbcgenError> {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let msg = MyActorMessage::GetValue {
+                name,
+                respond_to: tx,
+            };
+            let send_res = self.message_sender.send(msg).await;
+            match send_res {
+                Ok(_) => rx.await.map_err(|e| AbcgenError::ActorShutDown),
+                Err(e) => Err(AbcgenError::ActorShutDown),
+            }
         }
     }
 }

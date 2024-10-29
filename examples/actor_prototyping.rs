@@ -5,6 +5,7 @@
 
 use my_actor_module::{MyActor, MyActorEvent};
 use std::sync::{atomic::AtomicBool, Arc};
+
 //#[actor_module]
 mod my_actor_module {
 
@@ -22,10 +23,8 @@ mod my_actor_module {
     pub type EventSender = tokio::sync::broadcast::Sender<MyActorEvent>;
     #[derive(Debug, thiserror::Error)]
     pub enum AbcgenError {
-        #[error("Service is already stopped")]
-        AlreadyStopped,
-        #[error("Failed to send message. Channel overrun or service stopped.")]
-        ChannelError(#[source] Box<dyn std::error::Error>),
+        #[error("The actor was already terminated.")]
+        ActorShutDown,
     }
     #[derive(Debug, Clone)]
     pub enum MyActorEvent {
@@ -96,9 +95,9 @@ mod my_actor_module {
             log::info!("do_that called");
         }
 
-        async fn get_that(&mut self, name: String) -> i32 {
+        async fn get_that(&mut self, name: String) -> Result<i32, MyActorError> {
             log::info!("get_that called: name={}", name);
-            42
+            Ok(42)
         }
     }
 
@@ -111,7 +110,7 @@ mod my_actor_module {
         DoThat {},
         GetThat {
             name: String,
-            respond_to: tokio::sync::oneshot::Sender<i32>,
+            respond_to: tokio::sync::oneshot::Sender<Result<i32, MyActorError>>,
         },
     }
 
@@ -130,8 +129,8 @@ mod my_actor_module {
 
         pub fn stop(&mut self) -> Result<(), AbcgenError> {
             match self.stop_signal.take() {
-                Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::AlreadyStopped),
-                None => Err(AbcgenError::AlreadyStopped),
+                Some(tx) => tx.send(()).map_err(|_e: ()| AbcgenError::ActorShutDown),
+                None => Err(AbcgenError::ActorShutDown),
             }
         }
 
@@ -153,7 +152,7 @@ mod my_actor_module {
                 .message_sender
                 .send(msg)
                 .await
-                .map_err(|e| AbcgenError::ChannelError(Box::new(e)));
+                .map_err(|e| AbcgenError::ActorShutDown);
             send_res
         }
 
@@ -163,11 +162,11 @@ mod my_actor_module {
                 .message_sender
                 .send(msg)
                 .await
-                .map_err(|e| AbcgenError::ChannelError(Box::new(e)));
+                .map_err(|e| AbcgenError::ActorShutDown);
             send_res
         }
 
-        pub async fn get_that(&self, name: String) -> Result<i32, AbcgenError> {
+        pub async fn get_that(&self, name: String) -> Result<i32, MyActorError> {
             let (tx, rx) = tokio::sync::oneshot::channel();
             let msg = MyActorMessage::GetThat {
                 name,
@@ -175,8 +174,10 @@ mod my_actor_module {
             };
             let send_res = self.message_sender.send(msg).await;
             match send_res {
-                Ok(_) => rx.await.map_err(|e| AbcgenError::ChannelError(Box::new(e))),
-                Err(e) => Err(AbcgenError::ChannelError(Box::new(e))),
+                Ok(_) => rx
+                    .await
+                    .unwrap_or_else(|e| Err(AbcgenError::ActorShutDown.into())),
+                Err(e) => Err(AbcgenError::ActorShutDown.into()),
             }
         }
     }
@@ -233,7 +234,7 @@ mod my_actor_module {
         ) -> Result<(), AbcgenError> {
             sender
                 .try_send(task)
-                .map_err(|e| AbcgenError::ChannelError(Box::new(e)))
+                .map_err(|e| AbcgenError::ActorShutDown)
         }
 
         fn invoke_fn(
@@ -243,7 +244,26 @@ mod my_actor_module {
             let task: Task<MyActor> = Box::new(task);
             sender
                 .try_send(task)
-                .map_err(|e| AbcgenError::ChannelError(Box::new(e)))
+                .map_err(|_| AbcgenError::ActorShutDown)
+        }
+    }
+    #[derive(Debug, thiserror::Error)]
+    pub enum MyActorError {
+        #[error("The actor was already terminated.")]
+        AlreadyStopped,
+        #[error("Channel error.")]
+        ChannelError,
+        #[error("An error occurred.")]
+        Foo,
+        #[error("Bar")]
+        Bar,
+    }
+
+    impl From<AbcgenError> for MyActorError {
+        fn from(e: AbcgenError) -> Self {
+            match e {
+                AbcgenError::ActorShutDown => MyActorError::AlreadyStopped,
+            }
         }
     }
 }

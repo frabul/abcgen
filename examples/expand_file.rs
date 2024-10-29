@@ -1,15 +1,17 @@
-/// Example on how to use the ab-code-gen library to generate the code by parsing and modifying a file.
+//! Example on how to use the ab-code-gen library to generate the code by parsing and modifying a file.
+
 use std::{
     io::{self, Write},
     thread::spawn,
 };
 
+use ab_code_gen::Config;
 use log::warn;
 use syn::*;
 
 fn main() {
-    expand_file("examples/print_stuff.rs");
     expand_file("examples/hello_world.rs");
+    expand_file("examples/print_stuff.rs");
     expand_file("examples/quick.rs");
 }
 
@@ -30,7 +32,8 @@ fn expand_file(file_path: &str) {
             _ => None,
         })
         .unwrap();
-    let actor_module = ab_code_gen::ActorModule::new(module).unwrap();
+    let config = Config::default();
+    let actor_module = ab_code_gen::ActorModule::new(module, &config).unwrap();
 
     let code = actor_module.generate().unwrap();
     // add produced code
